@@ -1,0 +1,13 @@
+# Secrets
+.env
+
+# Virtualenv
+venv/
+venv2/
+.venv/
+__pycache__/
+*.pyc
+
+# Runtime artifacts
+temp_screenshot.png
+*.log
