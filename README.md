@@ -81,18 +81,67 @@ Uses [PyAutoGUI](https://pyautogui.readthedocs.io/) + OpenCV image matching (`lo
 
 Tab wrap detection: compares the position of the current tab's close button against the first tab's close button position. If they match within a tolerance of 50px (horizontal) and 10px (vertical), the scan is complete.
 
+## Autostart (GNOME)
+
+For fully automated recovery on every reboot, three autostart entries work together:
+
+| Desktop entry | What it does | Timing |
+|---|---|---|
+| `reboot_recovery.desktop` | Clears Firefox/Brave stale locks, patches Brave prefs | Immediately at login |
+| `claude-monitor.desktop` | Opens Firefox claude-monitor profile | `sleep 3` (after recovery) |
+| `brave-auto-relay.desktop` | Polls until Brave is running, then scans tabs | Polls + `sleep 20` |
+
+### Setup autostart
+
+```bash
+# 1. Reboot recovery (run first, clears stale locks + patches Brave)
+cat > ~/.config/autostart/reboot_recovery.desktop << EOF
+[Desktop Entry]
+Type=Application
+Name=RebootRecovery
+Exec=bash /home/user/Code/BraveAutoRelay/reboot_recovery.sh
+X-GNOME-Autostart-enabled=true
+EOF
+
+# 2. BraveAutoRelay (polls until Brave is actually running)
+cat > ~/.config/autostart/brave-auto-relay.desktop << EOF
+[Desktop Entry]
+Type=Application
+Name=Brave Auto Relay
+Exec=bash -c "until pgrep -x brave > /dev/null; do sleep 3; done; sleep 20 && cd /home/user/Code/BraveAutoRelay && DISPLAY=:0 /home/user/Code/BraveAutoRelay/venv2/bin/python3 /home/user/Code/BraveAutoRelay/BraveAutoRelay.py"
+X-GNOME-Autostart-enabled=true
+EOF
+```
+
+### Additional one-time fixes (Ubuntu + GNOME)
+
+```bash
+# Disable screensaver lock (prevents GUI-blocking password dialog on auto-login)
+gsettings set org.gnome.desktop.screensaver lock-enabled false
+gsettings set org.gnome.desktop.screensaver ubuntu-lock-on-suspend false
+
+# Fix GNOME Keyring auto-unlock: open seahorse, change "Login" keyring password to empty
+seahorse
+```
+
+> **Note on snap Firefox**: Firefox snap stores its profile lock at
+> `~/snap/firefox/common/.mozilla/firefox/` — not `~/.mozilla/firefox/`.
+> `reboot_recovery.sh` clears both paths.
+
 ## File structure
 
 ```
 BraveAutoRelay/
-├── BraveAutoRelay.py      # Main script
-├── requirements.txt       # Python dependencies
-├── .env.template          # Environment variable template
-├── .env                   # Your secrets (gitignored)
+├── BraveAutoRelay.py        # Main script
+├── reboot_recovery.sh       # Post-reboot: clear Firefox locks + patch Brave prefs
+├── patch_brave_prefs.py     # Patch Brave: exit_type=Normal, restore_on_startup=1
+├── requirements.txt         # Python dependencies
+├── .env.template            # Environment variable template
+├── .env                     # Your secrets (gitignored)
 └── images/
-    ├── relay_disabled.png # Reference: disabled relay icon
-    ├── relay_enabled.png  # Reference: enabled relay badge
-    └── tab_close.png      # Reference: tab close button
+    ├── relay_disabled.png   # Reference: disabled relay icon
+    ├── relay_enabled.png    # Reference: enabled relay badge
+    └── tab_close.png        # Reference: tab close button
 ```
 
 ## Notes
@@ -100,6 +149,7 @@ BraveAutoRelay/
 - `temp_screenshot.png` (written during runs) is gitignored
 - If `DISPLAY` is not set, defaults to `:0` automatically (useful for autostart / cron)
 - Crashes are caught and sent to Discord with a stack trace
+- Brave prefs are backed up before each patch (`.bak.YYYYMMDD-HHMMSS` suffix)
 
 ## License
 
